@@ -54,6 +54,7 @@ elif st.session_state.page == "login":
                     st.error("Incorrect password")
                 else:
                     st.session_state.name = name
+                    data = logic.Data(name)
                     st.session_state.page = "home"
                     st.rerun()
 
@@ -78,7 +79,8 @@ elif st.session_state.page == "signup":
                 elif name == "" or id_val == "":
                     st.warning("Fill all fields")
                 else:
-                    logic.resetAll(name, id_val)
+                    data = logic.Data(name)
+                    data.resetAll(id_val)
                     st.session_state.name = name
                     st.session_state.page = "home"
                     st.rerun()
