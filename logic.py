@@ -55,7 +55,23 @@ starting_stats = {
             "owned": 0
         },
         "computers": {
-            "owned": 0
+            "microsoft laptop": {
+                "owned": 0,
+                "price": 1699,
+                "history": [1699]
+            },
+
+            "macbook": {
+                "owned": 0,
+                "price": 1499,
+                "history": [1499]
+            },
+
+            "chromebook": {
+                "owned": 0,
+                "price": 850,
+                "history": [850]
+            }
         }
     },
     "stocks": {

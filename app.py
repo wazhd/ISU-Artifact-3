@@ -95,6 +95,8 @@ elif st.session_state.page == "stock":
         fig, ax = plt.subplots(figsize=(10, 5))
         months = list(range(len(history)))
         ax.plot(months, history, marker='o', linestyle='-', color='#1f77b4')
+        max_month = max(1, len(history) - 1)
+        ax.set_xlim(left=-0.5, right=max_month + 0.5)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.set_title(display_name)
         ax.set_xlabel("Months")
@@ -107,15 +109,28 @@ elif st.session_state.page == "stock":
 
 
     with panel:
-        change = ((current_price - history[-2]) / history[-2]) * 100
         st.write("### Stats")
         st.metric("Current Price", f"${current_price:,.2f}")
-        st.write(f"**Current Shares:** {stock_number:,.2f}")
+        st.write(f"**Current Shares:** {stock_number}")
         st.write(f"**Current Balance:** ${current_money:,.2f}")
-        if change > 0:
-            st.write(f"**Appreciated** by {change:.2f}% since last month")
+        if len(history) >= 2:
+            change = ((current_price - history[-2]) / history[-2]) * 100
+            if change > 0:
+                st.write(f"**Appreciated** by {change:.2f}% since last month")
+            else:
+                st.write(f"**Declined** by {-change:.2f}% since last month")
+        initial_price = history[0]
+        total_months = data["month"]
+
+        if initial_price > 0:
+            total_appreciation = ((current_price - initial_price) / initial_price) * 100
         else:
-            st.write(f"**Declined** by {-change:.2f}% since last month")
+            total_appreciation = 0
+        if total_months > 0:
+            rate = total_appreciation / total_months
+        else:
+            rate = 0
+        st.write(f"**Average Appreciation Rate:** {rate:.2f}% per month")
 
         st.divider()
 
@@ -158,7 +173,7 @@ elif st.session_state.page == "stock":
                     data["stocks"][display_name]["owned"] = shares_after
                     logic.save(data)
                     st.rerun()
-    if st.button("Back to Home", use_container_width=False):
+    if st.button("Back", use_container_width=False):
         st.session_state.page = "home"
         st.rerun()
 
@@ -310,4 +325,77 @@ elif st.session_state.page == "job":
     logic.back_button()
 
 elif st.session_state.page == "assets":
+    data = logic.read_save()
+    asset_data = data["assets"]
+    st.title("Assets")
     left, right = st.columns([1,1])
+    with left:
+        with st.container(border=True):
+            st.subheader("Computer")
+            if st.button("Buy computers"):
+                st.session_state.page = "computer"
+                st.rerun()
+        with st.container(border=True):
+            st.subheader("House")
+            if st.button("Buy houses"):
+                st.session_state.page = "house"
+                st.rerun()
+
+    with right:
+        with st.container(border=True):
+            st.subheader("Car")
+            if st.button("Buy cars"):
+                st.session_state.page = "car"
+                st.rerun()
+
+        with st.container(border=True):
+            st.subheader("Art")
+            if st.button("Buy artwork"):
+                st.session_state.page = "artwork"
+                st.rerun()
+
+
+    logic.back_button()
+
+elif st.session_state.page == "computer":
+    data = logic.read_save()
+    computer_data = data["assets"]["computers"]
+    st.title("Computers")
+    st.markdown(f"### Total Money: ${data['money']}")
+
+    with st.container(border=True):
+        st.subheader("Microsoft Laptop")
+        st.markdown(f"#### Price: ${computer_data['microsoft laptop']['history'][-1]}")
+        st.markdown(f"#### Owned: {computer_data['microsoft laptop']['owned']}")
+        if st.button("Buy 1", key="microsoft"):
+            computer_data['microsoft laptop']['owned'] += 1
+            if data["money"] - computer_data["microsoft laptop"]["history"][-1] > 0:
+                data["money"] = data["money"] - computer_data["microsoft laptop"]["history"][-1]
+
+            else:
+                st.error("Insufficient funds!")
+
+    with st.container(border=True):
+        st.subheader("MacBook")
+        st.markdown(f"#### Price: ${computer_data['macbook']['history'][-1]}")
+        st.markdown(f"#### Owned: {computer_data['macbook']['owned']}")
+        if st.button("Buy 1", key="macbook"):
+            data["assets"]["computers"]['macbook']['owned'] += 1
+            if data["money"] - computer_data["macbook"]["history"][-1] > 0:
+                data["money"] = data["money"] - computer_data["macbook"]["history"][-1]
+            else:
+                st.error("Insufficient funds!")
+    with st.container(border=True):
+        st.subheader("Chromebook")
+        st.markdown(f"#### Price: ${computer_data['chromebook']['history'][-1]}")
+        st.markdown(f"#### Owned: {computer_data['chromebook']['owned']}")
+        if st.button("Buy 1",key="chromebook"):
+            computer_data['chromebook']['owned'] += 1
+            if data["money"] - computer_data["chromebook"]["history"][-1] > 0:
+                data["money"] = data["money"] - computer_data["chromebook"]["history"][-1]
+            else:
+                st.error("Insufficient funds!")
+
+    if st.button("Back"):
+        st.session_state.page = "assets"
+        st.rerun()

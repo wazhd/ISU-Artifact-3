@@ -1,8 +1,8 @@
 {
-    "money": 25125.000000000004,
-    "month": 3,
-    "gross income": 6833.333333333333,
-    "net income": 5041.666666666667,
+    "money": 10000,
+    "month": 0,
+    "gross income": 0,
+    "net income": 0,
     "jobs": {
         "farmer": {
             "gross income": 6833.333333333333,
@@ -48,49 +48,59 @@
         },
         "artwork": {
             "owned": 0
+        },
+        "computers": {
+            "microsoft laptop": {
+                "owned": 0,
+                "price": 1699,
+                "history": [
+                    1699
+                ]
+            },
+            "macbook": {
+                "owned": 0,
+                "price": 1499,
+                "history": [
+                    1499
+                ]
+            },
+            "chromebook": {
+                "owned": 0,
+                "price": 850,
+                "history": [
+                    850
+                ]
+            }
         }
     },
     "stocks": {
         "Dave and Son's Coal Mine": {
             "owned": 0,
-            "price": 54.17,
+            "price": 50,
             "price_history": [
-                50,
-                50.79,
-                52.64,
-                54.17
+                50
             ]
         },
         "Xavier's Egg Farm": {
             "owned": 0,
-            "price": 578.94,
+            "price": 500,
             "price_history": [
-                500,
-                518.2,
-                529.61,
-                578.94
+                500
             ]
         },
         "Mr. Fox's Chicken Company": {
             "owned": 0,
-            "price": 77.65,
+            "price": 93,
             "price_history": [
-                93,
-                93.71,
-                102.55,
-                77.65
+                93
             ]
         },
         "Raymond's Water Company": {
             "owned": 0,
-            "price": 937.98,
+            "price": 1000,
             "price_history": [
-                1000,
-                854.67,
-                844.15,
-                937.98
+                1000
             ]
         }
-    },
-    "job": "farmer"
+    }
 }
