@@ -1,6 +1,6 @@
 .env
 
-database.pkl
+save.json
 
 .venv/
 venv/
