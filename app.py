@@ -584,7 +584,7 @@ elif st.session_state.page == "budget":
         with description_col:
             new_item_name = st.text_input("Item Name")
         with amount_col:
-            new_item_amount = st.number_input("Dollar Amount", min_value=0.0, step=10.0)
+            new_item_amount = st.number_input("Amount", min_value=0.0, step=10.0)
         with category_col:
             new_item_type = st.selectbox("Type", ["Expense", "Income"])
 
