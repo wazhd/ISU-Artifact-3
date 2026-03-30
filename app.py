@@ -119,18 +119,13 @@ elif st.session_state.page == "stock":
                 st.write(f"**Appreciated** by {change:.2f}% since last month")
             else:
                 st.write(f"**Declined** by {-change:.2f}% since last month")
-        initial_price = history[0]
-        total_months = data["month"]
 
-        if initial_price > 0:
-            total_appreciation = ((current_price - initial_price) / initial_price) * 100
+        rate = logic.calculate_average_monthly_change(history)
+
+        if rate > 0:
+             st.write(f"**Average Appreciation Rate:** {logic.calculate_average_monthly_change(history)}% per month")
         else:
-            total_appreciation = 0
-        if total_months > 0:
-            rate = total_appreciation / total_months
-        else:
-            rate = 0
-        st.write(f"**Average Appreciation Rate:** {rate:.2f}% per month")
+            st.write(f"**Average Depreciation Rate:** {logic.calculate_average_monthly_change(history)}% per month")
 
         st.divider()
 
@@ -361,40 +356,88 @@ elif st.session_state.page == "computer":
     data = logic.read_save()
     computer_data = data["assets"]["computers"]
     st.title("Computers")
-    st.markdown(f"### Total Money: ${data['money']}")
+    st.markdown(f"### Total Money: ${data['money']:.2f}")
 
-    with st.container(border=True):
-        st.subheader("Microsoft Laptop")
-        st.markdown(f"#### Price: ${computer_data['microsoft laptop']['history'][-1]}")
-        st.markdown(f"#### Owned: {computer_data['microsoft laptop']['owned']}")
-        if st.button("Buy 1", key="microsoft"):
-            computer_data['microsoft laptop']['owned'] += 1
-            if data["money"] - computer_data["microsoft laptop"]["history"][-1] > 0:
-                data["money"] = data["money"] - computer_data["microsoft laptop"]["history"][-1]
+    comp_list = [
+        ("Microsoft Laptop", "microsoft laptop"),
+        ("MacBook", "macbook"),
+        ("Chromebook", "chromebook")
+    ]
 
-            else:
-                st.error("Insufficient funds!")
+    for display_name, comp_key in comp_list:
+        history = computer_data[comp_key]['history']
+        owned_count = computer_data[comp_key]['owned']
+        current_price = history[-1]
+        current_money = data['money']
 
-    with st.container(border=True):
-        st.subheader("MacBook")
-        st.markdown(f"#### Price: ${computer_data['macbook']['history'][-1]}")
-        st.markdown(f"#### Owned: {computer_data['macbook']['owned']}")
-        if st.button("Buy 1", key="macbook"):
-            data["assets"]["computers"]['macbook']['owned'] += 1
-            if data["money"] - computer_data["macbook"]["history"][-1] > 0:
-                data["money"] = data["money"] - computer_data["macbook"]["history"][-1]
-            else:
-                st.error("Insufficient funds!")
-    with st.container(border=True):
-        st.subheader("Chromebook")
-        st.markdown(f"#### Price: ${computer_data['chromebook']['history'][-1]}")
-        st.markdown(f"#### Owned: {computer_data['chromebook']['owned']}")
-        if st.button("Buy 1",key="chromebook"):
-            computer_data['chromebook']['owned'] += 1
-            if data["money"] - computer_data["chromebook"]["history"][-1] > 0:
-                data["money"] = data["money"] - computer_data["chromebook"]["history"][-1]
-            else:
-                st.error("Insufficient funds!")
+        last_entry = history[-1]
+        second_last_entry = history[-2] if len(history) > 1 else last_entry
+
+        with st.container(border=True):
+            st.subheader(display_name)
+            left, right = st.columns([1, 1])
+
+            with left:
+                st.markdown(f"#### Price: ${last_entry:,.2f}")
+                st.markdown(f"#### Owned: {owned_count}")
+                st.markdown(f"#### Depreciated by ${abs(last_entry - second_last_entry):.2f} since last month")
+                st.markdown(
+                    f"#### Depreciated by {abs(logic.calculate_change(last_entry, second_last_entry)):.2f}% since last month")
+                st.markdown(
+                    f"#### Average Depreciation Rate: {abs(logic.calculate_average_monthly_change(history)):.2f}% per month")
+
+                st.divider()
+
+                buy_val = st.number_input(f"Buy amount", min_value=0, step=1, key=f"buy_in_{comp_key}")
+                if buy_val > 0:
+                    cost = current_price * buy_val
+                    balance_after = current_money - cost
+
+                    st.write(f"Balance Before: ${current_money:,.2f}")
+                    st.write(f"Total Cost: ${cost:,.2f}")
+                    st.write(f"Balance After: ${balance_after:,.2f}")
+
+                    if cost > current_money:
+                        st.error("Insufficient funds!")
+                    else:
+                        if st.button(f"Confirm Purchase", key=f"buy_btn_{comp_key}", use_container_width=True):
+                            data["money"] = balance_after
+                            data["assets"]["computers"][comp_key]["owned"] += buy_val
+                            logic.save(data)
+                            st.rerun()
+
+                st.divider()
+
+                sell_val = st.number_input(f"Sell amount", min_value=0, step=1, key=f"sell_in_{comp_key}")
+                if sell_val > 0:
+                    if sell_val > owned_count:
+                        st.error("Not enough units!")
+                    else:
+                        gain = sell_val * current_price
+                        balance_after = current_money + gain
+
+                        st.write(f"Balance Before: ${current_money:,.2f}")
+                        st.write(f"Total Earnings: ${gain:,.2f}")
+                        st.write(f"Balance After: ${balance_after:,.2f}")
+
+                        if st.button(f"Confirm Sale", key=f"sell_btn_{comp_key}", use_container_width=True):
+                            data["money"] = balance_after
+                            data["assets"]["computers"][comp_key]["owned"] -= sell_val
+                            logic.save(data)
+                            st.rerun()
+
+            with right:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                x_vals = list(range(len(history)))
+                ax.plot(x_vals, history, marker='o', linestyle='-', color='#1f77b4')
+                max_m = max(1, len(history) - 1)
+                ax.set_xlim(left=-0.5, right=max_m + 0.5)
+                ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+                ax.set_title(f"{display_name} Market Value")
+                ax.set_xlabel("Months")
+                ax.set_ylabel("Price ($)")
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
 
     if st.button("Back"):
         st.session_state.page = "assets"
