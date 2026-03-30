@@ -55,7 +55,23 @@ starting_stats = {
             "owned": 0
         },
         "computers": {
-            "owned": 0
+            "microsoft laptop": {
+                "owned": 0,
+                "price": 1699,
+                "history": [1699]
+            },
+
+            "macbook": {
+                "owned": 0,
+                "price": 1499,
+                "history": [1499]
+            },
+
+            "chromebook": {
+                "owned": 0,
+                "price": 850,
+                "history": [850]
+            }
         }
     },
     "stocks": {
@@ -126,9 +142,52 @@ def update_simulation():
     data["month"] += 1
     save(data)
     update_market()
+    update_computer_value()
 
 def back_button():
     st.divider()
     if st.button("Back"):
         st.session_state.page = "home"
         st.rerun()
+def back(page):
+    st.divider()
+    if st.button("Back"):
+        st.session_state.page = page
+        st.rerun()
+
+def predict_value(purchase_price, months_passed, useful_life):
+    depreciation_rate = 2 / useful_life
+    years_passed = months_passed / 12
+    market_value = purchase_price * ((1 - depreciation_rate) ** years_passed)
+    return round(max(market_value, 50), 2)
+
+def update_computer_value():
+    data = read_save()
+    months = data["month"]
+    initial_1 = data["assets"]["computers"]["microsoft laptop"]["history"][0]
+    initial_2 = data["assets"]["computers"]["macbook"]["history"][0]
+    initial_3 = data["assets"]["computers"]["chromebook"]["history"][0]
+
+    data["assets"]["computers"]["microsoft laptop"]["history"].append(predict_value(initial_1, months, 7))
+    data["assets"]["computers"]["macbook"]["history"].append(predict_value(initial_2, months, 6))
+    data["assets"]["computers"]["chromebook"]["history"].append(predict_value(initial_3, months, 5))
+
+    save(data)
+
+
+def calculate_average_monthly_change(history):
+    if len(history) < 2:
+        return 0.0
+
+    total_percentage_change = 0
+    intervals = len(history) - 1
+
+    for i in range(1, len(history)):
+        previous_price = history[i - 1]
+        current_price = history[i]
+
+        if previous_price != 0:
+            change = ((current_price - previous_price) / previous_price) * 100
+            total_percentage_change += change
+
+    return round(total_percentage_change / intervals, 2)
