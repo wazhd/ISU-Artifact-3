@@ -1,4 +1,5 @@
 import streamlit as st
+
 import logic
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -23,6 +24,15 @@ elif st.session_state.page == "home":
     data = logic.read_save()
     logic.empty(2)
 
+
+    total_monthly_mortgage = 0
+    total_monthly_interest = 0
+    for h_key in data["assets"]["houses"]:
+        h = data["assets"]["houses"][h_key]
+        if h.get("mortgage_active"):
+            total_monthly_mortgage += h.get("monthly_payment", 0)
+            total_monthly_interest += h.get("monthly_interest_paid", 0)
+
     st.markdown(f"#### **Total Money:** ${data['money']:.2f}")
     if "job" not in data:
         st.markdown(f"#### **Job:** none")
@@ -31,6 +41,11 @@ elif st.session_state.page == "home":
 
     st.markdown(f"#### **Monthly Gross Income:** ${data['gross income']:.2f}")
     st.markdown(f"#### **Monthly Net Income:** ${data['net income']:.2f}")
+
+    st.markdown(f"#### **Monthly Mortgage Paid:** ${total_monthly_mortgage:.2f}")
+    st.markdown(f"#### **Monthly Interest Paid:** ${total_monthly_interest:.2f}")
+
+    st.markdown(f"#### ")
     st.markdown(f"#### **Month:** {data['month']}")
 
     logic.empty(2)
@@ -46,9 +61,9 @@ elif st.session_state.page == "home":
     left, middle, right = st.columns([1, 1, 1])
     with left:
         with st.container(border=True):
-            st.image("assets/bank.png")
-            if st.button("Bank", use_container_width=True):
-                st.session_state.page = "bank"
+            st.image("assets/assets.png")
+            if st.button("Assets", use_container_width=True):
+                st.session_state.page = "assets"
                 st.rerun()
         with st.container(border=True):
             st.image("assets/budget.png")
@@ -63,11 +78,7 @@ elif st.session_state.page == "home":
                 st.session_state.page = "stock"
                 st.rerun()
 
-        with st.container(border=True):
-            st.image("assets/assets.png")
-            if st.button("Assets", use_container_width=True):
-                st.session_state.page = "assets"
-                st.rerun()
+
     with right:
         with st.container(border=True):
             st.image("assets/job.png")
@@ -336,18 +347,7 @@ elif st.session_state.page == "assets":
                 st.session_state.page = "house"
                 st.rerun()
 
-    with right:
-        with st.container(border=True):
-            st.subheader("Car")
-            if st.button("Buy cars"):
-                st.session_state.page = "car"
-                st.rerun()
 
-        with st.container(border=True):
-            st.subheader("Art")
-            if st.button("Buy artwork"):
-                st.session_state.page = "artwork"
-                st.rerun()
 
 
     logic.back_button()
@@ -441,4 +441,211 @@ elif st.session_state.page == "computer":
 
     if st.button("Back"):
         st.session_state.page = "assets"
+        st.rerun()
+
+elif st.session_state.page == "house":
+    data = logic.read_save()
+    house_data = data["assets"]["houses"]
+    st.title("Houses")
+    st.markdown(f"### Total Money: ${data['money']:,.2f}")
+
+    comp_list = [
+        ("Single", "single"),
+        ("Townhouse", "townhouse"),
+        ("Apartment", "apartment")
+    ]
+
+    for display_name, comp_key in comp_list:
+        h_stats = house_data[comp_key]
+        history = h_stats['history']
+        owned_count = h_stats['owned']
+        current_money = data['money']
+
+        last_entry = history[-1]
+        second_last_entry = history[-2] if len(history) > 1 else last_entry
+
+        with st.container(border=True):
+            st.subheader(display_name)
+            left, right = st.columns([1, 1])
+
+            with left:
+                st.markdown(f"#### Price: ${last_entry:,.2f}")
+                st.markdown(f"#### Owned: {owned_count}")
+
+                difference = last_entry - second_last_entry
+                perc_change = logic.calculate_change(last_entry, second_last_entry)
+                avg_rate = logic.calculate_average_monthly_change(history)
+
+                if difference < 0:
+                    st.markdown(f"#### Depreciated by ${abs(difference):,.2f} since last month")
+                    st.markdown(f"#### Depreciated by {abs(perc_change):.2f}% since last month")
+                    st.markdown(f"#### Average Depreciation Rate: {abs(avg_rate):.2f}% per month")
+                else:
+                    st.markdown(f"#### Appreciated by ${abs(difference):,.2f} since last month")
+                    st.markdown(f"#### Appreciated by {abs(perc_change):.2f}% since last month")
+                    st.markdown(f"#### Average Appreciation Rate: {abs(avg_rate):.2f}% per month")
+
+                st.divider()
+
+                if h_stats.get("mortgage_active"):
+                    st.markdown(f"**Active Mortgage Info:**")
+                    st.write(f"Monthly Payment: ${h_stats['monthly_payment']:,.2f}")
+                    st.write(f"Interest Paid: ${h_stats.get('monthly_interest_paid', 0):,.2f}")
+                    st.write(f"Months Remaining: {h_stats['remaining_months']}")
+                    st.divider()
+
+                pay_method = st.radio("Payment Method", ["Cash", "Mortgage"], key=f"meth_{comp_key}")
+
+                if pay_method == "Cash":
+                    if st.button(f"Buy using cash", key=f"btn_c_{comp_key}", use_container_width=True):
+                        if current_money >= last_entry:
+                            data["money"] -= last_entry
+                            data["assets"]["houses"][comp_key]["owned"] += 1
+                            logic.save(data)
+                            st.rerun()
+                        else:
+                            st.error("Insufficient Funds")
+                else:
+                    d_pay = st.number_input("Downpayment ($)", 0.0, float(last_entry), last_entry * 0.2,
+                                            key=f"down_{comp_key}")
+                    m_type = st.selectbox("Interest Type", ["simple", "compound"], key=f"type_{comp_key}")
+                    m_rate = st.number_input("Monthly Interest Rate (%)", 0.0, 5.0, 0.5, key=f"rate_{comp_key}")
+                    m_months = st.number_input("Months", 1, 360, 180, key=f"dur_{comp_key}")
+
+                    loan_principal = last_entry - d_pay
+                    monthly_total = logic.get_monthly_installment(loan_principal, m_rate, m_months, m_type)
+
+                    if m_type == "simple":
+                        total_int = logic.calculate_simple_interest(loan_principal, m_rate, m_months)
+                    else:
+                        total_int = logic.calculate_compound_interest(loan_principal, m_rate, m_months)
+                    monthly_interest_paid = total_int / m_months
+
+                    st.write(f"**Monthly Payment:** ${monthly_total:,.2f}")
+                    st.write(f"**Monthly Interest Paid:** ${monthly_interest_paid:,.2f}")
+                    st.write(f"**Monthly Interest Rate:** {m_rate}%")
+
+                    if st.button(f"Take Mortgage", key=f"btn_m_{comp_key}", use_container_width=True):
+                        if current_money >= d_pay:
+                            data["money"] -= d_pay
+                            data["assets"]["houses"][comp_key]["owned"] += 1
+                            data["assets"]["houses"][comp_key]["mortgage_active"] = True
+                            data["assets"]["houses"][comp_key]["monthly_payment"] = monthly_total
+                            data["assets"]["houses"][comp_key]["monthly_interest_paid"] = monthly_interest_paid
+                            data["assets"]["houses"][comp_key]["remaining_months"] = m_months
+                            logic.save(data)
+                            st.rerun()
+                        else:
+                            st.error("Not enough money for downpayment")
+
+                st.divider()
+
+                if owned_count > 0:
+                    if st.button(f"Sell 1 Unit", key=f"sell_{comp_key}", use_container_width=True):
+                        data["money"] += last_entry
+                        data["assets"]["houses"][comp_key]["owned"] -= 1
+                        logic.save(data)
+                        st.rerun()
+
+            with right:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                x_vals = list(range(len(history)))
+                ax.plot(x_vals, history, marker='o', linestyle='-', color='#1f77b4')
+                max_m = max(1, len(history) - 1)
+                ax.set_xlim(left=-0.5, right=max_m + 0.5)
+                ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+                ax.set_title(f"{display_name} Market Value")
+                ax.set_xlabel("Months")
+                ax.set_ylabel("Price ($)")
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
+
+    if st.button("Back"):
+        st.session_state.page = "assets"
+        st.rerun()
+
+elif st.session_state.page == "budget":
+    st.title("Monthly Budget")
+    data = logic.read_save()
+
+    salary_income = float(data.get("net income", 0))
+
+    total_mortgage_cost = 0.0
+    for house_name in data["assets"]["houses"]:
+        house_info = data["assets"]["houses"][house_name]
+        if house_info.get("mortgage_active"):
+            total_mortgage_cost += float(house_info.get("monthly_payment", 0))
+
+    if "user_custom_items" not in st.session_state:
+        st.session_state.user_custom_items = []
+
+    with st.expander("Add New Item"):
+        description_col, amount_col, category_col = st.columns([2, 1, 1])
+        with description_col:
+            new_item_name = st.text_input("Item Name")
+        with amount_col:
+            new_item_amount = st.number_input("Amount", min_value=0.0, step=10.0)
+        with category_col:
+            new_item_type = st.selectbox("Type", ["Expense", "Income"])
+
+        if st.button("Add to List", use_container_width=True):
+            if new_item_name:
+                st.session_state.user_custom_items.append({
+                    "description": new_item_name,
+                    "amount": new_item_amount,
+                    "category": new_item_type
+                })
+                st.rerun()
+
+    st.divider()
+
+    st.markdown("### **Monthly Income**")
+    income_sum = salary_income
+
+    income_left, income_right = st.columns([3, 1])
+    income_left.write("Monthly Net Income")
+    income_right.write(f"${salary_income:,.2f}")
+
+    for item in st.session_state.user_custom_items:
+        if item["category"] == "Income":
+            left_column, right_column = st.columns([3, 1])
+            left_column.write(item["description"])
+            right_column.write(f"${item['amount']:,.2f}")
+            income_sum += item["amount"]
+
+    st.markdown(f"**Total Income: ${income_sum:,.2f}**")
+    st.write("")
+
+    st.markdown("### **Monthly Expenses**")
+    expense_sum = total_mortgage_cost
+
+    expense_left, expense_right = st.columns([3, 1])
+    expense_left.write("Mortgage Payments")
+    expense_right.write(f"${total_mortgage_cost:,.2f}")
+
+    for item in st.session_state.user_custom_items:
+        if item["category"] == "Expense":
+            left_column, right_column = st.columns([3, 1])
+            left_column.write(item["description"])
+            right_column.write(f"${item['amount']:,.2f}")
+            expense_sum += item["amount"]
+
+    st.markdown(f"**Total Expenses: ${expense_sum:,.2f}**")
+
+    st.divider()
+
+    remaining_balance = income_sum - expense_sum
+
+    label_column, value_column = st.columns([3, 1])
+    with label_column:
+        st.markdown("### **Total (Income minus Expenses)**")
+    with value_column:
+        st.markdown(f"### **${remaining_balance:,.2f}**")
+
+    if st.button("Back"):
+        st.session_state.page = "home"
+        st.rerun()
+
+    if st.button("Clear Custom Items"):
+        st.session_state.user_custom_items = []
         st.rerun()
