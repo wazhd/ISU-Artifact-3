@@ -1,1 +1,922 @@
-You in a life simulator game, you need to be kind and helpful.
+INSTRUCTIONS:
+
+You in an AI in a life simulator game, you need to be kind and helpful. You are a life advice counselor, so answer all of the user's
+questions in detail (ex: financial help, etc). Although, don't write too long, try to keep between 2-5 sentences (if needed). This is the code for the game.
+app.py: "import streamlit as st
+
+import logic
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+import ai
+import asyncio
+
+st.set_page_config(initial_sidebar_state="collapsed", layout="wide")
+
+if "page" not in st.session_state:
+    st.session_state.page = "menu"
+    st.session_state.ai_model = "gemini_1"
+    logic.save(logic.starting_stats)
+
+if st.session_state.page == "menu":
+    left, middle, right = st.columns([1, 2, 1])
+    with middle:
+        st.title("Life Simulator")
+        if st.button("Play", use_container_width=True):
+            st.session_state.page = "home"
+            st.rerun()
+
+elif st.session_state.page == "home":
+    st.title("Manage Your Life")
+    data = logic.read_save()
+    logic.empty(2)
+
+
+    total_monthly_mortgage = 0
+    total_monthly_interest = 0
+    for h_key in data["assets"]["houses"]:
+        h = data["assets"]["houses"][h_key]
+        if h.get("mortgage_active"):
+            total_monthly_mortgage += h.get("monthly_payment", 0)
+            total_monthly_interest += h.get("monthly_interest_paid", 0)
+
+    st.markdown(f"#### **Total Money:** ${data['money']:.2f}")
+    if "job" not in data:
+        st.markdown(f"#### **Job:** none")
+    else:
+        st.markdown(f"#### **Job:** {data['job']}")
+
+    st.markdown(f"#### **Monthly Gross Income:** ${data['gross income']:.2f}")
+    st.markdown(f"#### **Monthly Net Income:** ${data['net income']:.2f}")
+
+    st.markdown(f"#### **Monthly Mortgage Paid:** ${total_monthly_mortgage:.2f}")
+    st.markdown(f"#### **Monthly Interest Paid:** ${total_monthly_interest:.2f}")
+
+    st.markdown(f"#### ")
+    st.markdown(f"#### **Month:** {data['month']}")
+
+    logic.empty(2)
+
+    if st.button("+1 Month", use_container_width=True):
+        logic.update_simulation()
+        st.rerun()
+
+    st.divider()
+
+    logic.empty(2)
+
+    left, middle, right = st.columns([1, 1, 1])
+    with left:
+        with st.container(border=True):
+            st.image("assets/assets.png")
+            if st.button("Assets", use_container_width=True):
+                st.session_state.page = "assets"
+                st.rerun()
+        with st.container(border=True):
+            st.image("assets/budget.png")
+            if st.button("Budget", use_container_width=True):
+                st.session_state.page = "budget"
+                st.rerun()
+
+    with middle:
+        with st.container(border=True):
+            st.image("assets/stock.png")
+            if st.button("Stock Market", use_container_width=True):
+                st.session_state.page = "stock"
+                st.rerun()
+        with st.container(border=True):
+            st.image("assets/ai.png")
+            if st.button("Life advice", use_container_width=True):
+                st.session_state.page = "ai"
+                st.rerun()
+
+    with right:
+        with st.container(border=True):
+            st.image("assets/job.png")
+            if st.button("Find a job", use_container_width=True):
+                st.session_state.page = "job"
+                st.rerun()
+
+elif st.session_state.page == "stock":
+    data = logic.read_save()
+    st.title("Stock Market")
+
+    stock_options = list(data["stocks"].keys())
+    display_name = st.selectbox("Select a stock to analyse", stock_options)
+
+    graph, panel = st.columns([3, 1])
+
+    current_price = data["stocks"][display_name]["price"]
+    current_money = data["money"]
+    stock_number = data["stocks"][display_name]["owned"]
+    history = data["stocks"][display_name]["price_history"]
+
+    with graph:
+        st.write("")
+        st.write("")
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        months = list(range(len(history)))
+        ax.plot(months, history, marker='o', linestyle='-', color='#1f77b4')
+        max_month = max(1, len(history) - 1)
+        ax.set_xlim(left=-0.5, right=max_month + 0.5)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.set_title(display_name)
+        ax.set_xlabel("Months")
+        ax.set_ylabel("Price ($)")
+        ax.grid(True, alpha=0.3)
+
+        st.pyplot(fig)
+
+        st.divider()
+
+
+    with panel:
+        st.write("### Stats")
+        st.metric("Current Price", f"${current_price:,.2f}")
+        st.write(f"**Current Shares:** {stock_number}")
+        st.write(f"**Current Balance:** ${current_money:,.2f}")
+        if len(history) >= 2:
+            change = ((current_price - history[-2]) / history[-2]) * 100
+            if change > 0:
+                st.write(f"**Appreciated** by {change:.2f}% since last month")
+            else:
+                st.write(f"**Declined** by {-change:.2f}% since last month")
+
+        rate = logic.calculate_average_monthly_change(history)
+
+        if rate > 0:
+             st.write(f"**Average Appreciation Rate:** {logic.calculate_average_monthly_change(history)}% per month")
+        else:
+            st.write(f"**Average Depreciation Rate:** {logic.calculate_average_monthly_change(history)}% per month")
+
+        st.divider()
+
+        buy_input = st.number_input("Buy shares", min_value=0, step=1)
+        if buy_input > 0:
+            total_cost = current_price * buy_input
+            balance_after = current_money - total_cost
+            shares_after = stock_number + buy_input
+
+            st.write(f"Shares After: {shares_after:,.2f}")
+            st.write(f"Cost: ${total_cost:,.2f}")
+            st.write(f"Balance After: ${balance_after:,.2f}")
+
+            if total_cost > current_money:
+                st.error("Insufficient funds!")
+            else:
+                if st.button("Confirm Purchase", use_container_width=True):
+                    data["money"] = balance_after
+                    data["stocks"][display_name]["owned"] = shares_after
+                    logic.save(data)
+                    st.rerun()
+
+        st.divider()
+
+        sell_input = st.number_input("Sell shares", min_value=0, step=1)
+        if sell_input > 0:
+            if sell_input > stock_number:
+                st.error("Not enough shares!")
+            else:
+                gain = sell_input * current_price
+                balance_after = current_money + gain
+                shares_after = stock_number - sell_input
+
+                st.write(f"Shares After: {shares_after:,.2f}")
+                st.write(f"Earnings: ${gain:,.2f}")
+                st.write(f"Balance After: ${balance_after:,.2f}")
+
+                if st.button("Confirm Sale", use_container_width=True):
+                    data["money"] = balance_after
+                    data["stocks"][display_name]["owned"] = shares_after
+                    logic.save(data)
+                    st.rerun()
+    if st.button("Back", use_container_width=False):
+        st.session_state.page = "home"
+        st.rerun()
+
+elif st.session_state.page == "job":
+    data = logic.read_save()
+    job_data = data["jobs"]
+    st.title("Choose a Job")
+
+    with st.container(border=True):
+        st.markdown("# Farmer")
+        st.markdown(f"#### **Monthly Salary:** ${job_data['farmer']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Gross Income:** ${job_data['farmer']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Net Income:** ${job_data['farmer']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Difference:** ${job_data['farmer']['gross income'] - job_data['farmer']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Tax Rate:** {logic.calculate_change(job_data['farmer']['gross income'], job_data['farmer']['net income'])}%")
+        logic.empty(1)
+        if data.get("job") != "farmer":
+            if st.button("Get this job!", key="btn_farmer"):
+                data["job"] = "farmer"
+                data["gross income"] = job_data["farmer"]["gross income"]
+                data["net income"] = job_data["farmer"]["net income"]
+                logic.save(data)
+                st.rerun()
+        else:
+            st.button("You already have this job", key="has_farmer", disabled=True)
+
+    with st.container(border=True):
+        st.markdown("# Librarian")
+        st.markdown(f"#### **Monthly Salary:** ${job_data['librarian']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Gross Income:** ${job_data['librarian']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Net Income:** ${job_data['librarian']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Difference:** ${job_data['librarian']['gross income'] - job_data['librarian']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Tax Rate:** {logic.calculate_change(job_data['librarian']['gross income'], job_data['librarian']['net income'])}%")
+        logic.empty(1)
+        if data.get("job") != "librarian":
+            if st.button("Get this job!", key="btn_librarian"):
+                data["job"] = "librarian"
+                data["gross income"] = job_data["librarian"]["gross income"]
+                data["net income"] = job_data["librarian"]["net income"]
+                logic.save(data)
+                st.rerun()
+        else:
+            st.button("You already have this job", key="has_librarian", disabled=True)
+
+    with st.container(border=True):
+        st.markdown("# Plumber")
+        st.markdown(f"#### **Monthly Salary:** ${job_data['plumber']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Gross Income:** ${job_data['plumber']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Net Income:** ${job_data['plumber']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Difference:** ${job_data['plumber']['gross income'] - job_data['plumber']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Tax Rate:** {logic.calculate_change(job_data['plumber']['gross income'], job_data['plumber']['net income'])}%")
+        logic.empty(1)
+        if data.get("job") != "plumber":
+            if st.button("Get this job!", key="btn_plumber"):
+                data["job"] = "plumber"
+                data["gross income"] = job_data["plumber"]["gross income"]
+                data["net income"] = job_data["plumber"]["net income"]
+                logic.save(data)
+                st.rerun()
+        else:
+            st.button("You already have this job", key="has_plumber", disabled=True)
+
+    with st.container(border=True):
+        st.markdown("# Electrician")
+        st.markdown(f"#### **Monthly Salary:** ${job_data['electrician']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Gross Income:** ${job_data['electrician']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Net Income:** ${job_data['electrician']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Difference:** ${job_data['electrician']['gross income'] - job_data['electrician']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Tax Rate:** {logic.calculate_change(job_data['electrician']['gross income'], job_data['electrician']['net income'])}%")
+        logic.empty(1)
+        if data.get("job") != "electrician":
+            if st.button("Get this job!", key="btn_electrician"):
+                data["job"] = "electrician"
+                data["gross income"] = job_data["electrician"]["gross income"]
+                data["net income"] = job_data["electrician"]["net income"]
+                logic.save(data)
+                st.rerun()
+        else:
+            st.button("You already have this job", key="has_electrician", disabled=True)
+
+    with st.container(border=True):
+        st.markdown("# Pharmacist")
+        st.markdown(f"#### **Monthly Salary:** ${job_data['pharmacist']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Gross Income:** ${job_data['pharmacist']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Net Income:** ${job_data['pharmacist']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Difference:** ${job_data['pharmacist']['gross income'] - job_data['pharmacist']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Tax Rate:** {logic.calculate_change(job_data['pharmacist']['gross income'], job_data['pharmacist']['net income'])}%")
+        logic.empty(1)
+        if data.get("job") != "pharmacist":
+            if st.button("Get this job!", key="btn_pharmacist"):
+                data["job"] = "pharmacist"
+                data["gross income"] = job_data["pharmacist"]["gross income"]
+                data["net income"] = job_data["pharmacist"]["net income"]
+                logic.save(data)
+                st.rerun()
+        else:
+            st.button("You already have this job", key="has_pharmacist", disabled=True)
+
+    with st.container(border=True):
+        st.markdown("# Cashier")
+        st.markdown(f"#### **Monthly Salary:** ${job_data['cashier']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Gross Income:** ${job_data['cashier']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Net Income:** ${job_data['cashier']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Difference:** ${job_data['cashier']['gross income'] - job_data['cashier']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Tax Rate:** {logic.calculate_change(job_data['cashier']['gross income'], job_data['cashier']['net income'])}%")
+        logic.empty(1)
+        if data.get("job") != "cashier":
+            if st.button("Get this job!", key="btn_cashier"):
+                data["job"] = "cashier"
+                data["gross income"] = job_data["cashier"]["gross income"]
+                data["net income"] = job_data["cashier"]["net income"]
+                logic.save(data)
+                st.rerun()
+        else:
+            st.button("You already have this job", key="has_cashier", disabled=True)
+
+    with st.container(border=True):
+        st.markdown("# Construction Worker")
+        st.markdown(f"#### **Monthly Salary:** ${job_data['construction worker']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Gross Income:** ${job_data['construction worker']['gross income']:,.2f}")
+        st.markdown(f"#### **Monthly Net Income:** ${job_data['construction worker']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Difference:** ${job_data['construction worker']['gross income'] - job_data['construction worker']['net income']:,.2f}")
+        st.markdown(
+            f"#### **Tax Rate:** {logic.calculate_change(job_data['construction worker']['gross income'], job_data['construction worker']['net income'])}%")
+        logic.empty(1)
+        if data.get("job") != "construction worker":
+            if st.button("Get this job!", key="btn_construction"):
+                data["job"] = "construction worker"
+                data["gross income"] = job_data["construction worker"]["gross income"]
+                data["net income"] = job_data["construction worker"]["net income"]
+                logic.save(data)
+                st.rerun()
+        else:
+            st.button("You already have this job", key="has_construction", disabled=True)
+
+    logic.back_button()
+
+elif st.session_state.page == "assets":
+    data = logic.read_save()
+    asset_data = data["assets"]
+    st.title("Assets")
+    left, right = st.columns([1,1])
+    with left:
+        with st.container(border=True):
+            st.subheader("Computer")
+            if st.button("Buy computers"):
+                st.session_state.page = "computer"
+                st.rerun()
+        with st.container(border=True):
+            st.subheader("House")
+            if st.button("Buy houses"):
+                st.session_state.page = "house"
+                st.rerun()
+
+
+
+
+    logic.back_button()
+
+elif st.session_state.page == "computer":
+    data = logic.read_save()
+    computer_data = data["assets"]["computers"]
+    st.title("Computers")
+    st.markdown(f"### Total Money: ${data['money']:.2f}")
+
+    comp_list = [
+        ("Microsoft Laptop", "microsoft laptop"),
+        ("MacBook", "macbook"),
+        ("Chromebook", "chromebook")
+    ]
+
+    for display_name, comp_key in comp_list:
+        history = computer_data[comp_key]['history']
+        owned_count = computer_data[comp_key]['owned']
+        current_price = history[-1]
+        current_money = data['money']
+
+        last_entry = history[-1]
+        second_last_entry = history[-2] if len(history) > 1 else last_entry
+
+        with st.container(border=True):
+            st.subheader(display_name)
+            left, right = st.columns([1, 1])
+
+            with left:
+                st.markdown(f"#### Price: ${last_entry:,.2f}")
+                st.markdown(f"#### Owned: {owned_count}")
+                st.markdown(f"#### Depreciated by ${abs(last_entry - second_last_entry):.2f} since last month")
+                st.markdown(
+                    f"#### Depreciated by {abs(logic.calculate_change(last_entry, second_last_entry)):.2f}% since last month")
+                st.markdown(
+                    f"#### Average Depreciation Rate: {abs(logic.calculate_average_monthly_change(history)):.2f}% per month")
+
+                st.divider()
+
+                buy_val = st.number_input(f"Buy amount", min_value=0, step=1, key=f"buy_in_{comp_key}")
+                if buy_val > 0:
+                    cost = current_price * buy_val
+                    balance_after = current_money - cost
+
+                    st.write(f"Balance Before: ${current_money:,.2f}")
+                    st.write(f"Total Cost: ${cost:,.2f}")
+                    st.write(f"Balance After: ${balance_after:,.2f}")
+
+                    if cost > current_money:
+                        st.error("Insufficient funds!")
+                    else:
+                        if st.button(f"Confirm Purchase", key=f"buy_btn_{comp_key}", use_container_width=True):
+                            data["money"] = balance_after
+                            data["assets"]["computers"][comp_key]["owned"] += buy_val
+                            logic.save(data)
+                            st.rerun()
+
+                st.divider()
+
+                sell_val = st.number_input(f"Sell amount", min_value=0, step=1, key=f"sell_in_{comp_key}")
+                if sell_val > 0:
+                    if sell_val > owned_count:
+                        st.error("Not enough units!")
+                    else:
+                        gain = sell_val * current_price
+                        balance_after = current_money + gain
+
+                        st.write(f"Balance Before: ${current_money:,.2f}")
+                        st.write(f"Total Earnings: ${gain:,.2f}")
+                        st.write(f"Balance After: ${balance_after:,.2f}")
+
+                        if st.button(f"Confirm Sale", key=f"sell_btn_{comp_key}", use_container_width=True):
+                            data["money"] = balance_after
+                            data["assets"]["computers"][comp_key]["owned"] -= sell_val
+                            logic.save(data)
+                            st.rerun()
+
+            with right:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                x_vals = list(range(len(history)))
+                ax.plot(x_vals, history, marker='o', linestyle='-', color='#1f77b4')
+                max_m = max(1, len(history) - 1)
+                ax.set_xlim(left=-0.5, right=max_m + 0.5)
+                ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+                ax.set_title(f"{display_name} Market Value")
+                ax.set_xlabel("Months")
+                ax.set_ylabel("Price ($)")
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
+
+    if st.button("Back"):
+        st.session_state.page = "assets"
+        st.rerun()
+
+elif st.session_state.page == "house":
+    data = logic.read_save()
+    house_data = data["assets"]["houses"]
+    st.title("Houses")
+    st.markdown(f"### Total Money: ${data['money']:,.2f}")
+
+    comp_list = [
+        ("Single", "single"),
+        ("Townhouse", "townhouse"),
+        ("Apartment", "apartment")
+    ]
+
+    for display_name, comp_key in comp_list:
+        h_stats = house_data[comp_key]
+        history = h_stats['history']
+        owned_count = h_stats['owned']
+        current_money = data['money']
+
+        last_entry = history[-1]
+        second_last_entry = history[-2] if len(history) > 1 else last_entry
+
+        with st.container(border=True):
+            st.subheader(display_name)
+            left, right = st.columns([1, 1])
+
+            with left:
+                st.markdown(f"#### Price: ${last_entry:,.2f}")
+                st.markdown(f"#### Owned: {owned_count}")
+
+                difference = last_entry - second_last_entry
+                perc_change = logic.calculate_change(last_entry, second_last_entry)
+                avg_rate = logic.calculate_average_monthly_change(history)
+
+                if difference < 0:
+                    st.markdown(f"#### Depreciated by ${abs(difference):,.2f} since last month")
+                    st.markdown(f"#### Depreciated by {abs(perc_change):.2f}% since last month")
+                    st.markdown(f"#### Average Depreciation Rate: {abs(avg_rate):.2f}% per month")
+                else:
+                    st.markdown(f"#### Appreciated by ${abs(difference):,.2f} since last month")
+                    st.markdown(f"#### Appreciated by {abs(perc_change):.2f}% since last month")
+                    st.markdown(f"#### Average Appreciation Rate: {abs(avg_rate):.2f}% per month")
+
+                st.divider()
+
+                if h_stats.get("mortgage_active"):
+                    st.markdown(f"**Active Mortgage Info:**")
+                    st.write(f"Monthly Payment: ${h_stats['monthly_payment']:,.2f}")
+                    st.write(f"Interest Paid: ${h_stats.get('monthly_interest_paid', 0):,.2f}")
+                    st.write(f"Months Remaining: {h_stats['remaining_months']}")
+                    st.divider()
+
+                pay_method = st.radio("Payment Method", ["Cash", "Mortgage"], key=f"meth_{comp_key}")
+
+                if pay_method == "Cash":
+                    if st.button(f"Buy using cash", key=f"btn_c_{comp_key}", use_container_width=True):
+                        if current_money >= last_entry:
+                            data["money"] -= last_entry
+                            data["assets"]["houses"][comp_key]["owned"] += 1
+                            logic.save(data)
+                            st.rerun()
+                        else:
+                            st.error("Insufficient Funds")
+                else:
+                    d_pay = st.number_input("Downpayment ($)", 0.0, float(last_entry), last_entry * 0.2,
+                                            key=f"down_{comp_key}")
+                    m_type = st.selectbox("Interest Type", ["simple", "compound"], key=f"type_{comp_key}")
+                    m_rate = st.number_input("Monthly Interest Rate (%)", 0.0, 5.0, 0.5, key=f"rate_{comp_key}")
+                    m_months = st.number_input("Months", 1, 360, 180, key=f"dur_{comp_key}")
+
+                    loan_principal = last_entry - d_pay
+                    monthly_total = logic.get_monthly_installment(loan_principal, m_rate, m_months, m_type)
+
+                    if m_type == "simple":
+                        total_int = logic.calculate_simple_interest(loan_principal, m_rate, m_months)
+                    else:
+                        total_int = logic.calculate_compound_interest(loan_principal, m_rate, m_months)
+                    monthly_interest_paid = total_int / m_months
+
+                    st.write(f"**Monthly Payment:** ${monthly_total:,.2f}")
+                    st.write(f"**Monthly Interest Paid:** ${monthly_interest_paid:,.2f}")
+                    st.write(f"**Monthly Interest Rate:** {m_rate}%")
+
+                    if st.button(f"Take Mortgage", key=f"btn_m_{comp_key}", use_container_width=True):
+                        if current_money >= d_pay:
+                            data["money"] -= d_pay
+                            data["assets"]["houses"][comp_key]["owned"] += 1
+                            data["assets"]["houses"][comp_key]["mortgage_active"] = True
+                            data["assets"]["houses"][comp_key]["monthly_payment"] = monthly_total
+                            data["assets"]["houses"][comp_key]["monthly_interest_paid"] = monthly_interest_paid
+                            data["assets"]["houses"][comp_key]["remaining_months"] = m_months
+                            logic.save(data)
+                            st.rerun()
+                        else:
+                            st.error("Not enough money for downpayment")
+
+                st.divider()
+
+                if owned_count > 0:
+                    if st.button(f"Sell 1 Unit", key=f"sell_{comp_key}", use_container_width=True):
+                        data["money"] += last_entry
+                        data["assets"]["houses"][comp_key]["owned"] -= 1
+                        logic.save(data)
+                        st.rerun()
+
+            with right:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                x_vals = list(range(len(history)))
+                ax.plot(x_vals, history, marker='o', linestyle='-', color='#1f77b4')
+                max_m = max(1, len(history) - 1)
+                ax.set_xlim(left=-0.5, right=max_m + 0.5)
+                ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+                ax.set_title(f"{display_name} Market Value")
+                ax.set_xlabel("Months")
+                ax.set_ylabel("Price ($)")
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
+
+    if st.button("Back"):
+        st.session_state.page = "assets"
+        st.rerun()
+
+elif st.session_state.page == "budget":
+    st.title("Monthly Budget")
+    data = logic.read_save()
+
+    salary_income = float(data.get("net income", 0))
+
+    total_mortgage_cost = 0.0
+    for house_name in data["assets"]["houses"]:
+        house_info = data["assets"]["houses"][house_name]
+        if house_info.get("mortgage_active"):
+            total_mortgage_cost += float(house_info.get("monthly_payment", 0))
+
+    if "user_custom_items" not in st.session_state:
+        st.session_state.user_custom_items = []
+
+    with st.expander("Add New Item"):
+        description_col, amount_col, category_col = st.columns([2, 1, 1])
+        with description_col:
+            new_item_name = st.text_input("Item Name")
+        with amount_col:
+            new_item_amount = st.number_input("Amount", min_value=0.0, step=10.0)
+        with category_col:
+            new_item_type = st.selectbox("Type", ["Expense", "Income"])
+
+        if st.button("Add to List", use_container_width=True):
+            if new_item_name:
+                st.session_state.user_custom_items.append({
+                    "description": new_item_name,
+                    "amount": new_item_amount,
+                    "category": new_item_type
+                })
+                st.rerun()
+
+    st.divider()
+
+    st.markdown("### **Monthly Income**")
+    income_sum = salary_income
+
+    income_left, income_right = st.columns([3, 1])
+    income_left.write("Monthly Net Income")
+    income_right.write(f"${salary_income:,.2f}")
+
+    for item in st.session_state.user_custom_items:
+        if item["category"] == "Income":
+            left_column, right_column = st.columns([3, 1])
+            left_column.write(item["description"])
+            right_column.write(f"${item['amount']:,.2f}")
+            income_sum += item["amount"]
+
+    st.markdown(f"**Total Income: ${income_sum:,.2f}**")
+    st.write("")
+
+    st.markdown("### **Monthly Expenses**")
+    expense_sum = total_mortgage_cost
+
+    expense_left, expense_right = st.columns([3, 1])
+    expense_left.write("Mortgage Payments")
+    expense_right.write(f"${total_mortgage_cost:,.2f}")
+
+    for item in st.session_state.user_custom_items:
+        if item["category"] == "Expense":
+            left_column, right_column = st.columns([3, 1])
+            left_column.write(item["description"])
+            right_column.write(f"${item['amount']:,.2f}")
+            expense_sum += item["amount"]
+
+    st.markdown(f"**Total Expenses: ${expense_sum:,.2f}**")
+
+    st.divider()
+
+    remaining_balance = income_sum - expense_sum
+
+    label_column, value_column = st.columns([3, 1])
+    with label_column:
+        st.markdown("### **Total (Income minus Expenses)**")
+    with value_column:
+        st.markdown(f"### **${remaining_balance:,.2f}**")
+
+    if st.button("Back"):
+        st.session_state.page = "home"
+        st.rerun()
+
+    if st.button("Clear Custom Items"):
+        st.session_state.user_custom_items = []
+        st.rerun()
+elif st.session_state.page == "ai":
+    st.title("AI Life Advice")
+
+    if "chat_log_ai" not in st.session_state:
+        st.session_state["chat_log_ai"] = ""
+
+    left, right = st.columns([1, 2])
+
+    with left:
+        st.image("assets/ai.png")
+
+        user_question = st.text_input("Ask the AI any questions about the game, ISU, or anything in general:")
+        ask_button = st.button("Ask...", use_container_width=True)
+
+    with right:
+        chat_box = st.container(height=500, border=True)
+        text_placeholder = chat_box.empty()
+
+        if st.session_state["chat_log_ai"] != "":
+            text_placeholder.markdown(st.session_state["chat_log_ai"])
+
+        if ask_button and user_question:
+            st.session_state["chat_log_ai"] += f"**YOU:** {user_question}\n\n"
+            text_placeholder.markdown(st.session_state["chat_log_ai"])
+
+            with chat_box:
+                with st.spinner("Thinking..."):
+
+                    new_response = asyncio.run(ai.generate_response(user_question, st.session_state["chat_log_ai"]))
+
+
+            st.session_state["chat_log_ai"] += f"**AI:** {new_response}\n\n---\n\n"
+            text_placeholder.markdown(st.session_state["chat_log_ai"])
+
+    if st.button("Back"):
+        st.session_state.page = "home"
+        st.rerun()"
+
+
+logic.py: "import json
+import os
+import numpy as np
+import streamlit as st
+
+starting_stats = {
+    "money": 500000,
+    "month": 0,
+    "gross income": 0,
+    "net income": 0,
+    "jobs": {
+        "farmer": {"gross income": 82000/12, "net income": 60500/12},
+        "librarian": {"gross income": 78000/12, "net income": 58500/12},
+        "plumber": {"gross income": 79500/12, "net income": 59500/12},
+        "electrician": {"gross income": 80800/12, "net income": 60300/12},
+        "pharmacist": {"gross income": 110500/12, "net income": 78600/12},
+        "cashier": {"gross income": 36600/12, "net income": 30200/12},
+        "construction worker": {"gross income": 62400/12, "net income": 48200/12}
+    },
+    "bank": {
+        "interest": {"type": "simple", "rate": 0.02},
+    },
+    "assets": {
+        "houses": {
+            "single": {
+                "owned": 0,
+                "mortgage_active": False,
+                "monthly_payment": 0,
+                "remaining_months": 0,
+                "history": [830951.0]
+            },
+            "townhouse": {
+                "owned": 0,
+                "mortgage_active": False,
+                "monthly_payment": 0,
+                "remaining_months": 0,
+                "history": [407000.0]
+            },
+            "apartment": {
+                "owned": 0,
+                "mortgage_active": False,
+                "monthly_payment": 0,
+                "remaining_months": 0,
+                "history": [375000.0]
+            },
+        },
+        "cars": {"owned": 0},
+        "artwork": {"owned": 0},
+        "computers": {
+            "microsoft laptop": {"owned": 0, "price": 1699, "history": [1699.0]},
+            "macbook": {"owned": 0, "price": 1499, "history": [1499.0]},
+            "chromebook": {"owned": 0, "price": 850, "history": [850.0]}
+        }
+    },
+    "stocks": {
+        "Dave and Son's Coal Mine": {"owned": 0, "price": 50, "price_history": [50.0]},
+        "Xavier's Egg Farm": {"owned": 0, "price": 500, "price_history": [500.0]},
+        "Mr. Fox's Chicken Company": {"owned": 0, "price": 93, "price_history": [93.0]},
+        "Raymond's Water Company": {"owned": 0, "price": 1000, "price_history": [1000.0]}
+    }
+}
+
+def save(data):
+    with open("save.json", "w") as f:
+        json.dump(data, f, indent=4)
+
+
+def read_save():
+    if os.path.exists("save.json"):
+        with open("save.json", "r") as f:
+            return json.load(f)
+
+    else:
+        return reset()
+
+
+def reset():
+    save(starting_stats)
+    return starting_stats
+
+
+def update_market():
+    data = read_save()
+    configs = {
+        "Dave and Son's Coal Mine": {"drift": 0.03, "vol": 0.06},
+        "Xavier's Egg Farm": {"drift": 0.008, "vol": 0.1},
+        "Mr. Fox's Chicken Company": {"drift": 0.02, "vol": 0.12},
+        "Raymond's Water Company": {"drift": 0.01, "vol": 0.08}
+    }
+
+    for name, stats in configs.items():
+        current_price = data["stocks"][name]["price"]
+        drift = stats["drift"]
+        vol = stats["vol"]
+        shock = np.random.normal(0, 1)
+
+        change_factor = np.exp((drift - 0.5 * vol ** 2) + vol * shock)
+        new_price = round(current_price * change_factor, 2)
+
+        data["stocks"][name]["price"] = new_price
+        data["stocks"][name]["price_history"].append(new_price)
+
+    save(data)
+
+
+def update_prices(current_price, drift, vol):
+    dt = 1 / 12
+    shock = np.random.normal(0, 1)
+
+    exponent = (drift - 0.5 * vol ** 2) * dt + vol * np.sqrt(dt) * shock
+    change_factor = np.exp(exponent)
+
+    new_price = np.round(current_price * change_factor, 2)
+    return new_price
+
+def empty(num):
+    for _ in range(num):
+        st.write("\n")
+
+def calculate_change(current_price, previous_price):
+    difference = current_price - previous_price
+    percentage_change = (difference / current_price) * 100
+    return round(percentage_change, 2)
+
+
+def update_simulation():
+    data = read_save()
+    data["money"] += data["net income"]
+
+    for house_key in data["assets"]["houses"]:
+        house = data["assets"]["houses"][house_key]
+        if house.get("mortgage_active") and house.get("remaining_months", 0) > 0:
+            data["money"] -= house["monthly_payment"]
+            house["remaining_months"] -= 1
+            if house["remaining_months"] <= 0:
+                house["mortgage_active"] = False
+
+    data["month"] += 1
+    save(data)
+    update_market()
+    update_computer_value()
+    update_house_prices()
+
+def back_button():
+    st.divider()
+    if st.button("Back"):
+        st.session_state.page = "home"
+        st.rerun()
+def back(page):
+    st.divider()
+    if st.button("Back"):
+        st.session_state.page = page
+        st.rerun()
+
+def predict_value(purchase_price, months_passed, useful_life):
+    depreciation_rate = 2 / useful_life
+    years_passed = months_passed / 12
+    base = max(0, 1 - depreciation_rate)
+    market_value = purchase_price * (base ** years_passed)
+    return round(max(market_value, 50), 2)
+def update_computer_value():
+    data = read_save()
+    months = data["month"]
+    initial_1 = data["assets"]["computers"]["microsoft laptop"]["history"][0]
+    initial_2 = data["assets"]["computers"]["macbook"]["history"][0]
+    initial_3 = data["assets"]["computers"]["chromebook"]["history"][0]
+
+    data["assets"]["computers"]["microsoft laptop"]["history"].append(predict_value(initial_1, months, 7))
+    data["assets"]["computers"]["macbook"]["history"].append(predict_value(initial_2, months, 6))
+    data["assets"]["computers"]["chromebook"]["history"].append(predict_value(initial_3, months, 5))
+
+    save(data)
+
+
+def update_house_prices():
+    data = read_save()
+    current_1 = data["assets"]["houses"]["single"]["history"][-1]
+    current_2 = data["assets"]["houses"]["townhouse"]["history"][-1]
+    current_3 = data["assets"]["houses"]["apartment"]["history"][-1]
+
+    data["assets"]["houses"]["single"]["history"].append(update_prices(current_1, 0.045, 0.12))
+    data["assets"]["houses"]["townhouse"]["history"].append(update_prices(current_2, 0.035, 0.1))
+    data["assets"]["houses"]["apartment"]["history"].append(update_prices(current_3, 0.03, 0.15))
+
+    save(data)
+
+def calculate_average_monthly_change(history):
+    if len(history) < 2:
+        return 0.0
+
+    total_percentage_change = 0
+    intervals = len(history) - 1
+
+    for i in range(1, len(history)):
+        previous_price = history[i - 1]
+        current_price = history[i]
+
+        if previous_price != 0:
+            change = ((current_price - previous_price) / previous_price) * 100
+            total_percentage_change += change
+
+    return round(total_percentage_change / intervals, 2)
+
+
+
+def calculate_simple_interest(principal, monthly_rate, months):
+    return principal * (monthly_rate / 100) * months
+
+def calculate_compound_interest(principal, monthly_rate, months):
+    return principal * ((1 + (monthly_rate / 100)) ** months - 1)
+
+
+def get_monthly_installment(principal, monthly_rate, months, interest_type):
+    if interest_type == "simple":
+        interest = calculate_simple_interest(principal, monthly_rate, months)
+    else:
+        interest = calculate_compound_interest(principal, monthly_rate, months)
+
+    total_to_pay = principal + interest
+    return round(total_to_pay / months, 2)
+"

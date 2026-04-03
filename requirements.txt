@@ -1,4 +1,7 @@
 streamlit
-pandas
 matplotlib
 numpy
+asyncio
+gradio_client
+google-genai
+python-dotenv

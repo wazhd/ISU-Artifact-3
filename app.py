@@ -1,14 +1,17 @@
 import streamlit as st
 
 import logic
-import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
+import ai
+import asyncio
 
 st.set_page_config(initial_sidebar_state="collapsed", layout="wide")
 
 if "page" not in st.session_state:
     st.session_state.page = "menu"
+    st.session_state.ai_model = "gemini_1"
+    st.session_state["chat_log_ai"] = ""
     logic.save(logic.starting_stats)
 
 if st.session_state.page == "menu":
@@ -77,7 +80,11 @@ elif st.session_state.page == "home":
             if st.button("Stock Market", use_container_width=True):
                 st.session_state.page = "stock"
                 st.rerun()
-
+        with st.container(border=True):
+            st.image("assets/ai.png")
+            if st.button("Life advice", use_container_width=True):
+                st.session_state.page = "ai"
+                st.rerun()
 
     with right:
         with st.container(border=True):
@@ -85,6 +92,7 @@ elif st.session_state.page == "home":
             if st.button("Find a job", use_container_width=True):
                 st.session_state.page = "job"
                 st.rerun()
+
 elif st.session_state.page == "stock":
     data = logic.read_save()
     st.title("Stock Market")
@@ -648,4 +656,41 @@ elif st.session_state.page == "budget":
 
     if st.button("Clear Custom Items"):
         st.session_state.user_custom_items = []
+        st.rerun()
+elif st.session_state.page == "ai":
+    st.title("AI Life Advice")
+
+    if "chat_log_ai" not in st.session_state:
+        st.session_state["chat_log_ai"] = ""
+
+    left, right = st.columns([1, 2])
+
+    with left:
+        st.image("assets/ai.png")
+
+        user_question = st.text_input("Ask the AI any questions about the game, ISU, or anything in general:")
+        ask_button = st.button("Ask...", use_container_width=True)
+
+    with right:
+        chat_box = st.container(height=500, border=True)
+        text_placeholder = chat_box.empty()
+
+        if st.session_state["chat_log_ai"] != "":
+            text_placeholder.markdown(st.session_state["chat_log_ai"])
+
+        if ask_button and user_question:
+            st.session_state["chat_log_ai"] += f"**YOU:** {user_question}\n\n"
+            text_placeholder.markdown(st.session_state["chat_log_ai"])
+
+            with chat_box:
+                with st.spinner("Thinking..."):
+
+                    new_response = asyncio.run(ai.generate_response(user_question, st.session_state["chat_log_ai"]))
+
+
+            st.session_state["chat_log_ai"] += f"**AI:** {new_response}\n\n---\n\n"
+            text_placeholder.markdown(st.session_state["chat_log_ai"])
+
+    if st.button("Back"):
+        st.session_state.page = "home"
         st.rerun()
